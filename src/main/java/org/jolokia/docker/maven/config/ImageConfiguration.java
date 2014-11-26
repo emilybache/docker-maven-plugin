@@ -1,9 +1,7 @@
 package org.jolokia.docker.maven.config;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
-import org.apache.maven.plugins.annotations.Parameter;
 import org.jolokia.docker.maven.util.EnvUtil;
 import org.jolokia.docker.maven.util.StartOrderResolver;
 
@@ -13,17 +11,45 @@ import org.jolokia.docker.maven.util.StartOrderResolver;
  */
 public class ImageConfiguration implements StartOrderResolver.Resolvable {
 
-    @Parameter(required = true)
+    /**
+     * @parameter
+     * @required
+     */
     private String name;
 
-    @Parameter
+    /**
+     * @parameter
+     */
     private String alias;
 
-    @Parameter
+    /**
+     * @parameter
+     */
     private RunImageConfiguration run;
 
-    @Parameter
+    /**
+     * @parameter
+     */
     private BuildImageConfiguration build;
+
+    /**
+     * @parameter
+     */
+    private Map<String,String> external;
+
+    // Used for injection
+    public ImageConfiguration() {}
+
+    // For builder
+    private ImageConfiguration(String name, String alias,
+                               RunImageConfiguration run, BuildImageConfiguration build,
+                               Map<String, String> external) {
+        this.name = name;
+        this.alias = alias;
+        this.run = run;
+        this.build = build;
+        this.external = external;
+    }
 
     @Override
     public String getName() {
@@ -40,6 +66,10 @@ public class ImageConfiguration implements StartOrderResolver.Resolvable {
 
     public BuildImageConfiguration getBuildConfiguration() {
         return build;
+    }
+
+    public Map<String, String> getExternalConfig() {
+        return external;
     }
 
     @Override
@@ -68,9 +98,54 @@ public class ImageConfiguration implements StartOrderResolver.Resolvable {
     }
 
     public boolean isDataImage() {
-        // If there is no explicite run configuration, its a data image
-        // TODO: Probably add an explicite property so that a user can indicated whether it
-        // a data image or not on its own.
+        // If there is no explicit run configuration, its a data image
+        // TODO: Probably add an explicit property so that a user can indicated whether it
+        // is a data image or not on its own.
         return getRunConfiguration() == null;
+    }
+
+    public String getDescription() {
+        return "[" + name + "]" +
+               (alias != null ? " \"" + alias + "\"" : "");
+    }
+
+    // =========================================================================
+    // Builder for image configurations
+
+    public static class Builder {
+
+        String name,alias;
+        RunImageConfiguration runConfig;
+        BuildImageConfiguration buildConfig;
+        Map<String,String> externalConfig;
+
+        public Builder name(String name) {
+            this.name = name;
+            return this;
+        }
+
+        public Builder alias(String alias) {
+            this.alias = alias;
+            return this;
+        }
+
+        public Builder runConfig(RunImageConfiguration runConfig) {
+            this.runConfig = runConfig;
+            return this;
+        }
+
+        public Builder buildConfig(BuildImageConfiguration buildConfig) {
+            this.buildConfig = buildConfig;
+            return this;
+        }
+
+        public Builder externalConfig(Map<String, String> externalConfig) {
+            this.externalConfig = externalConfig;
+            return this;
+        }
+
+        public ImageConfiguration build() {
+            return new ImageConfiguration(name,alias,runConfig,buildConfig, externalConfig);
+        }
     }
 }

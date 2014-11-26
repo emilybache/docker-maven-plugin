@@ -21,7 +21,7 @@
 
   <groupId>org.jolokia</groupId>
   <artifactId>docker-jolokia-demo</artifactId>
-  <version>0.10.3</version>
+  <version>0.10.5-SNAPSHOT</version>
 
   <url>http://www.jolokia.org</url>
 
@@ -84,12 +84,12 @@
               <name>${image}</name>
               <run>
                 <volumes>
-                  <from>jolokia/${project.artifactId}:${project.version}</from>
+                  <from>data</from>
                 </volumes>
                 <env>
                   <CATALINA_OPTS>-Xmx32m</CATALINA_OPTS>
                   <!-- Base starts jolokia by default. With this, it can be disabled -->
-                  <JOLOKIA_OFF/>
+                  <JOLOKIA_OFF>1</JOLOKIA_OFF>
                 </env>
                 <ports>
                   <!-- Port mappings: Container internal port (which must be exposed) will be
@@ -182,6 +182,16 @@
           <skip>true</skip>
         </configuration>
       </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.2</version>
+        <configuration>
+          <source>1.7</source>
+          <target>1.7</target>
+        </configuration>
+      </plugin>
     </plugins>
   </build>
 
@@ -196,7 +206,7 @@
             <configuration combine.self="override">
               <images>
                 <image>
-                  <!-- Artefact Image-->
+                  <!-- Artifact Image-->
                   <name>jolokia/${project.artifactId}:${project.version}</name>
                   <build>
                     <from>${image}</from>
@@ -205,7 +215,7 @@
                   <run>
                     <env>
                       <CATALINA_OPTS>-Xmx32m</CATALINA_OPTS>
-                      <JOLOKIA_OFF/>
+                      <JOLOKIA_OFF>1</JOLOKIA_OFF>
                     </env>
                     <ports>
                       <!-- Port mappings: Container internal port (which must be exposed) will be
@@ -219,6 +229,39 @@
                       <time>10000</time>
                     </wait>
                   </run>
+                </image>
+              </images>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+
+    <profile>
+      <id>props</id>
+      <properties>
+        <docker.name>jolokia/${project.artifactId}:${project.version}</docker.name>
+        <docker.alias>service</docker.alias>
+        <docker.from>${image}</docker.from>
+        <docker.assemblyDescriptor>src/main/docker-assembly.xml</docker.assemblyDescriptor>
+        <docker.env.CATALINA_OPTS>-Xmx32m</docker.env.CATALINA_OPTS>
+        <docker.env.JOLOKIA_OPTS>1</docker.env.JOLOKIA_OPTS>
+        <docker.ports.jolokia.port>8080</docker.ports.jolokia.port>
+        <docker.wait.url>http://localhost:${jolokia.port}/jolokia</docker.wait.url>
+        <docker.time>10000</docker.time>
+      </properties>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.jolokia</groupId>
+            <artifactId>docker-maven-plugin</artifactId>
+            <configuration combine.self="override">
+              <images>
+                <image>
+                  <external>
+                    <type>props</type>
+                    <prefix>docker</prefix>
+                  </external>
                 </image>
               </images>
             </configuration>

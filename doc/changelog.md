@@ -4,6 +4,19 @@
 
 New configuration syntax with support for multiple containers 
 
+* **0.10.5**
+  - Add hooks for external configurations
+  - Add property based configuration for images (#42)
+
+* **0.10.4**
+  - Restructured and updated documentation
+  - Fixed push issue when using a private registry (#40)
+  - Add support for binding to an arbitrary host IP (#39)
+
+* **0.10.3**
+  - Added "remove" goal for cleaning up images
+  - Allow "stop" also as standalone goal for stopping all managed builds
+
 * **0.10.2**
   - Support for SSL Authentication with Docker 1.3. Plugin will respect `DOCKER_CERT_PATH` with fallback to `~/.docker/`. 
     The plugin configuration `certPath` can be used, too and has the highest priority.
@@ -12,11 +25,12 @@ New configuration syntax with support for multiple containers
     Images can be specified in any order, the plugin takes care of the right startup order when running containers.
   - Support for waiting on a container's log output before continuing 
 
-Still missing: documentation (coming soon ..)
-
 ## 0.9.x Series 
 
-Original configuration syntax (as described in the [README](README.md))
+Original configuration syntax (as described in the old [README](readme-0.9.x.md))
+
+* **0.9.12**
+  - Fixed push issue when using a private registry (#40)
 
 * **0.9.11**
   - Support for SSL Authentication with Docker 1.3. Plugin will respect `DOCKER_CERT_PATH` with fallback to `~/.docker/`. 

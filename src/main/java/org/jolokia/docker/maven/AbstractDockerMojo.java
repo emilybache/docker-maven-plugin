@@ -4,8 +4,6 @@ import java.io.File;
 import java.util.*;
 
 import org.apache.maven.plugin.*;
-import org.apache.maven.plugins.annotations.Component;
-import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
 import org.apache.maven.settings.Settings;
 import org.codehaus.plexus.PlexusConstants;
@@ -16,6 +14,7 @@ import org.codehaus.plexus.personality.plexus.lifecycle.phase.Contextualizable;
 import org.fusesource.jansi.AnsiConsole;
 import org.jolokia.docker.maven.access.*;
 import org.jolokia.docker.maven.config.ImageConfiguration;
+import org.jolokia.docker.maven.config.handler.ImageConfigResolver;
 import org.jolokia.docker.maven.util.*;
 
 /**
@@ -24,7 +23,7 @@ import org.jolokia.docker.maven.util.*;
  * @author roland
  * @since 26.03.14
  */
-public abstract class AbstractDockerMojo extends AbstractMojo implements LogHandler, Contextualizable {
+public abstract class AbstractDockerMojo extends AbstractMojo implements LogHandler,Contextualizable {
 
     // prefix used for console output
     private static final String LOG_PREFIX = "DOCKER> ";
@@ -36,43 +35,50 @@ public abstract class AbstractDockerMojo extends AbstractMojo implements LogHand
     public static final String CONTEXT_KEY_START_CALLED = "CONTEXT_KEY_DOCKER_START_CALLED";
 
     // Standard HTTPS port (IANA registered). The other 2375 with plain HTTP is used only in older
-    // docker installaitons.
+    // docker installations.
     public static final String DOCKER_HTTPS_PORT = "2376";
 
     // Current maven project
-    @Component
+    /** @parameter default-value="${project}" */
     protected MavenProject project;
 
     // Settings holding authentication info
-    @Component
+    /** @component */
     protected Settings settings;
 
-    // URL to docker daemon
-    @Parameter(property = "docker.url")
-    private String url;
+    // Handler for external configurations
+    /** @component */
+    protected ImageConfigResolver imageConfigResolver;
 
-    @Parameter(property = "docker.certPath")
+    // URL to docker daemon
+    /** @parameter property = "docker.host" */
+    private String dockerHost;
+
+    /** @parameter property = "docker.certPath" */
     private String certPath;
 
     // Whether to use color
-    @Parameter(property = "docker.useColor", defaultValue = "true")
-    private boolean color;
+    /** @parameter property = "docker.useColor" default-value = "true" */
+    private boolean useColor;
 
-    // Whether to skip docker alltogether
-    @Parameter(property = "docker.skip", defaultValue = "false")
+    // Whether to skip docker altogether
+    /** @parameter property = "docker.skip" default-value = "false" */
     private boolean skip;
 
     // Whether to restrict operation to a single image. This can be either
     // the image or an alias name
-    @Parameter(property = "docker.image")
-    private String imageToUse;
+    /** @parameter property = "docker.image" */
+    private String image;
 
     // Authentication information
-    @Parameter
+    /** @parameter */
     Map authConfig;
 
-    // Relevant configuration to use
-    @Parameter(required = true)
+    // Relevant configuration to use. This includes also references to external
+    // images
+    /**
+     * @parameter
+     * @required */
     private List<ImageConfiguration> images;
 
     // ANSI escapes for various colors (or empty strings if no coloring is used)
@@ -80,10 +86,6 @@ public abstract class AbstractDockerMojo extends AbstractMojo implements LogHand
 
     // Handler dealing with authentication credentials
     private AuthConfigFactory authConfigFactory;
-
-    protected static String getContainerImageDescription(String container, String image, String alias) {
-        return container.substring(0, 12) + " " + getImageDescription(image,alias);
-    }
 
     /**
      * Entry point for this plugin. It will set up the helper class and then calls {@link #executeInternal(DockerAccess)}
@@ -125,7 +127,7 @@ public abstract class AbstractDockerMojo extends AbstractMojo implements LogHand
 
     // Check both, url and env DOCKER_HOST (first takes precedence)
     private String extractUrl() {
-        String connect = url != null ? url : System.getenv("DOCKER_HOST");
+        String connect = dockerHost != null ? dockerHost : System.getenv("DOCKER_HOST");
         if (connect == null) {
             throw new IllegalArgumentException("No url given and now DOCKER_HOST environment variable set");
         }
@@ -189,22 +191,29 @@ public abstract class AbstractDockerMojo extends AbstractMojo implements LogHand
      * @return list of image configuration to use
      */
     protected List<ImageConfiguration> getImages() {
+        List<ImageConfiguration> resolvedImages = resolveImages();
+        List<ImageConfiguration> ret = new ArrayList<>();
+        for (ImageConfiguration image : resolvedImages) {
+            if (matchesConfiguredImages(image)) {
+                ret.add(image);
+            }
+        }
+        return ret;
+    }
+
+    private List<ImageConfiguration> resolveImages() {
         List<ImageConfiguration> ret = new ArrayList<>();
         for (ImageConfiguration image : images) {
-            if (!matchesConfiguredImages(image)) {
-                // Skip if an image name is set but does not match
-                continue;
-            }
-            ret.add(image);
+            ret.addAll(imageConfigResolver.resolve(image,project.getProperties()));
         }
         return ret;
     }
 
     private boolean matchesConfiguredImages(ImageConfiguration image) {
-        if (imageToUse == null) {
+        if (this.image == null) {
             return true;
         }
-        Set<String> imagesAllowed = new HashSet<>(Arrays.asList(imageToUse.split("\\s*,\\s*")));
+        Set<String> imagesAllowed = new HashSet<>(Arrays.asList(this.image.split("\\s*,\\s*")));
         return imagesAllowed.contains(image.getName()) || imagesAllowed.contains(image.getAlias());
     }
 
@@ -245,7 +254,7 @@ public abstract class AbstractDockerMojo extends AbstractMojo implements LogHand
 
     // Color init
     private void colorInit() {
-        if (color && System.console() != null) {
+        if (useColor && System.console() != null) {
             AnsiConsole.systemInstall();
             errorHlColor = "\u001B[0;31m";
             infoHlColor = "\u001B[0;32m";
@@ -335,9 +344,8 @@ public abstract class AbstractDockerMojo extends AbstractMojo implements LogHand
         return authConfigFactory.createAuthConfig(authConfig, image,settings);
     }
 
-    protected static String getImageDescription(String image, String alias) {
-        return "[" + image + "]" +
-               (alias != null ? " \"" + alias + "\"" : "");
+    protected static String getContainerAndImageDescription(String container, String description) {
+        return container.substring(0, 12) + " " + description;
     }
 
     // ==========================================================================================
@@ -354,10 +362,14 @@ public abstract class AbstractDockerMojo extends AbstractMojo implements LogHand
         // Data container create from image
         private String container;
 
-        protected ShutdownAction(String image, String alias, String container) {
-            this.image = image;
+        // Description
+        private String description;
+
+        protected ShutdownAction(ImageConfiguration imageConfig, String container) {
+            this.image = imageConfig.getName();
+            this.alias = imageConfig.getAlias();
+            this.description = imageConfig.getDescription();
             this.container = container;
-            this.alias = alias;
         }
 
         /**
@@ -387,7 +399,7 @@ public abstract class AbstractDockerMojo extends AbstractMojo implements LogHand
                     access.removeContainer(container);
                 }
                 log.info("Stopped" + (keepContainer ? "" : " and removed") + " container " +
-                         getContainerImageDescription(container, image, alias));
+                         getContainerAndImageDescription(container, description));
             } catch (DockerAccessException e) {
                 throw new MojoExecutionException("Cannot shutdown",e);
             }

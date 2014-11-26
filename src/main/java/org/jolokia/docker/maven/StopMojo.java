@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.maven.plugin.MojoExecutionException;
-import org.apache.maven.plugins.annotations.*;
 import org.jolokia.docker.maven.access.DockerAccess;
 import org.jolokia.docker.maven.access.DockerAccessException;
 import org.jolokia.docker.maven.config.ImageConfiguration;
@@ -20,34 +19,39 @@ import org.jolokia.docker.maven.config.ImageConfiguration;
  *
  * @author roland
  * @since 26.03.14
+ *
+ * @goal stop
+ * @phase post-integration-test
  */
-@Mojo(name = "stop", defaultPhase = LifecyclePhase.POST_INTEGRATION_TEST)
 public class StopMojo extends AbstractDockerMojo {
 
     // Whether to keep the containers afters stopping
-    @Parameter(property = "docker.keepContainer",defaultValue = "false")
+    /**
+     * @parameter property = "docker.keepContainer" default-value = "false"
+     */
     private boolean keepContainer;
 
     // Whether to *not* stop the container. Mostly useful as a command line param
-    @Parameter(property = "docker.keepRunning", defaultValue = "false")
+    /**
+     * @parameter property = "docker.keepRunning" defaultValue = "false"
+     */
     private boolean keepRunning;
 
     protected void executeInternal(DockerAccess access) throws MojoExecutionException, DockerAccessException {
 
         Boolean startCalled = (Boolean) getPluginContext().get(CONTEXT_KEY_START_CALLED);
 
-        if (startCalled == null || !startCalled) {
-            // Called directly ....
-
-            for (ImageConfiguration image : getImages()) {
-                String imageName = image.getName();
-                for (String container : access.getContainersForImage(imageName)) {
-                    new ShutdownAction(imageName,image.getAlias(), container).shutdown(access, this, keepContainer);
+        if (!keepRunning) {
+            if (startCalled == null || !startCalled) {
+                // Called directly ....
+                for (ImageConfiguration image : getImages()) {
+                    String imageName = image.getName();
+                    for (String container : access.getContainersForImage(imageName)) {
+                        new ShutdownAction(image, container).shutdown(access, this, keepContainer);
+                    }
                 }
-            }
-        } else {
-            // Called from a lifecycle phase ...
-            if (!keepRunning) {
+            } else {
+                // Called from a lifecycle phase ...
                 List<ShutdownAction> appliedShutdownActions = new ArrayList<>();
                 for (ShutdownAction action : getShutdownActionsInExecutionOrder()) {
                     action.shutdown(access, this, keepContainer);

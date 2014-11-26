@@ -46,14 +46,11 @@ public interface DockerAccess {
      * Start a container.
      *
      * @param containerId id of container to start
-     * @param ports ports to map. The keys of this map must be ports which were exposed via {@link #createContainer(String, String, Set, Map)}
-     *              while the values are the host ports to use. If a value is <code>null</code> a port is dynamically selected
-     *              by docker. The value of a dynamically selected port can be obtained via {@link #queryContainerPortMapping(String)}
-     *              This map must not be null (but can be empty)
+     * @param portMapping port mapping to use. Must not be null.
      * @param volumesFrom mount volumes from the given container id. Can be null.
      * @throws DockerAccessException if the container could not be started.
      */
-    void startContainer(String containerId, Map<Integer, Integer> ports, List<String> volumesFrom, List<String> links) throws DockerAccessException;
+    void startContainer(String containerId, PortMapping portMapping, List<String> volumesFrom, List<String> links) throws DockerAccessException;
 
     /**
      * Stop a container.
@@ -128,10 +125,11 @@ public interface DockerAccess {
      * Remove an image from this docker installation
      *
      * @param image image to remove
+     * @param force if set to true remove containers as well (only the first vararg is evaluated)
      * @return true if an image was removed, false if none was removed
      * @throws DockerAccessException if an image cannot be removed
      */
-    boolean removeImage(String image) throws DockerAccessException;
+    boolean removeImage(String image, boolean ... force) throws DockerAccessException;
 
     /**
      * Lifecycle method for this access class which must be called before any other method is called.
